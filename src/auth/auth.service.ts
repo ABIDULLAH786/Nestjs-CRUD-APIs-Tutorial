@@ -34,7 +34,23 @@ export class AuthService {
         }
     }
 
-    signin() {
-        return { status: 'success', statusCode: HttpStatus.OK, msg: "This is sign in api" }
+    async signin(dto: AuthDto) {
+
+        const user = await this.prisma.user.findUnique({
+            where: { email: dto.email }
+        })
+
+        if (!user) {
+            throw new ForbiddenException("Invalid Credentials");
+        }
+
+        const passMatches = await argon.verify(user.hash, dto.password)
+        if (!passMatches) {
+            throw new ForbiddenException("Invalid Credentials");
+        }
+
+        delete user.hash; // to remove the hash before sending response to client
+
+        return { status: 'success', statusCode: HttpStatus.OK, msg: "Successfully sign in", data: user }
     }
 }
