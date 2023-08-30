@@ -1,13 +1,20 @@
 import { ForbiddenException, HttpStatus, Injectable } from "@nestjs/common";
-import { AuthDto } from "./dto";
-import * as argon from "argon2"
-import { PrismaService } from "src/prisma/prisma.service";
+import { ConfigService } from "@nestjs/config";
 import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
+import { JwtService } from "@nestjs/jwt";
+import * as argon from "argon2"
+
+import { AuthDto } from "./dto";
+import { PrismaService } from "src/prisma/prisma.service";
 
 @Injectable({})
 
 export class AuthService {
-    constructor(private prisma: PrismaService) { }
+    constructor(
+        private prisma: PrismaService,
+        private jwt: JwtService,
+        private config: ConfigService
+    ) { }
     async signup(dto: AuthDto) {
         try {
             const hash = await argon.hash(dto.password);
@@ -18,8 +25,8 @@ export class AuthService {
                     hash
                 }
             })
-            delete user.hash;
-            return { status: 'success', statusCode: HttpStatus.CREATED, msg: "Successfully sign up", data: user }
+            // delete user.hash;
+            return { status: 'success', statusCode: HttpStatus.CREATED, msg: "Successfully sign up" }
 
         } catch (error) {
             // checks if the error comes from prisma
@@ -49,8 +56,19 @@ export class AuthService {
             throw new ForbiddenException("Invalid Credentials");
         }
 
-        delete user.hash; // to remove the hash before sending response to client
+        // delete user.hash; // to remove the hash before sending response to client
+        return { status: 'success', statusCode: HttpStatus.OK, msg: "Successfully sign in", access_token: await this.signToken(user.id, user.email) }
+    }
 
-        return { status: 'success', statusCode: HttpStatus.OK, msg: "Successfully sign in", data: user }
+    async signToken(id: string, email: string) {
+        const payload = {
+            sub: id,
+            email
+        }
+        const secret = this.config.get("JWT_SECRET")
+        return await this.jwt.signAsync(payload, {
+            expiresIn: "15m",
+            secret: secret,
+        })
     }
 }
